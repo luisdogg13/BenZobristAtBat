@@ -1,0 +1,14 @@
+C:\cvs\git\BenZobristAtBat\ZobristAtBat\bin\Debug\ZobristAtBat.exe.config
+C:\cvs\git\BenZobristAtBat\ZobristAtBat\obj\Debug\ZobristAtBat.exe
+C:\cvs\git\BenZobristAtBat\ZobristAtBat\obj\Debug\ZobristAtBat.pdb
+C:\cvs\git\BenZobristAtBat\ZobristAtBat\bin\Debug\ZobristAtBat.exe
+C:\cvs\git\BenZobristAtBat\ZobristAtBat\bin\Debug\ZobristAtBat.pdb
+C:\cvs\git\BenZobristAtBat\ZobristAtBat\bin\Debug\Hammock.ClientProfile.dll
+C:\cvs\git\BenZobristAtBat\ZobristAtBat\bin\Debug\Hammock.dll
+C:\cvs\git\BenZobristAtBat\ZobristAtBat\bin\Debug\Newtonsoft.Json.dll
+C:\cvs\git\BenZobristAtBat\ZobristAtBat\bin\Debug\TweetSharp.dll
+C:\cvs\git\BenZobristAtBat\ZobristAtBat\bin\Debug\Hammock.pdb
+C:\cvs\git\BenZobristAtBat\ZobristAtBat\bin\Debug\Hammock.ClientProfile.pdb
+C:\cvs\git\BenZobristAtBat\ZobristAtBat\bin\Debug\Newtonsoft.Json.xml
+C:\cvs\git\BenZobristAtBat\ZobristAtBat\bin\Debug\TweetSharp.pdb
+C:\cvs\git\BenZobristAtBat\ZobristAtBat\obj\Debug\ZobristAtBat.csprojResolveAssemblyReference.cache
