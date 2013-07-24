@@ -43,7 +43,7 @@ namespace ZobristAtBat
         {
             string month = DateTime.Now.ToString("MM");
             string date = DateTime.Now.ToString("dd");
-            date = "22";
+            //date = "22";
             string year = DateTime.Now.ToString("yyyy");
             
             //assemble the root directory on mlb.com based on today's date
@@ -91,7 +91,7 @@ namespace ZobristAtBat
             string curGameStatus = "";
             string curDateStr = DateTime.Today.Date.ToShortDateString();
             int curStatus = PICKING_ASS_IN_DUGOUT;
-            int curAtBat = 0;
+            int curAtBat = 1;
             curGameStatus = root.SelectSingleNode("@status_ind").InnerText;
 
             //if the game isn't final
@@ -150,7 +150,7 @@ namespace ZobristAtBat
 
             }
 
-            if (curGameStatus == "F") 
+            if (curGameStatus == "F" || curGameStatus == "O") 
             {
                 URLString = todaysURL + gameid + "/boxscore.xml";
                 doc.Load(URLString);
@@ -169,7 +169,7 @@ namespace ZobristAtBat
                     int rbi = Convert.ToInt32(zobieStats.GetNamedItem("rbi").Value);
                     int sb = Convert.ToInt32(zobieStats.GetNamedItem("sb").Value);
 
-                    tweet = "That's ballgame! Ben Zobrist went " + hits + "/" + ab;
+                    tweet = "That's the ballgame! Ben Zobrist went " + hits + "/" + ab;
 
                     if (r > 0 || hr > 0 || rbi > 0 || sb > 0)
                     {
