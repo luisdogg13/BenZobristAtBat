@@ -32,7 +32,10 @@ namespace ZobristAtBat
         }
         #endregion
 
-        private const string ZOBRIST_ID = "450314";
+        private const bool DEBUG = false;
+
+        //Zobrist: 450314
+        private const string PLAYER_ID = "450314";
 
         private const int IN_THE_HOLE = 1;
         private const int ON_DECK = 2;
@@ -43,28 +46,42 @@ namespace ZobristAtBat
         {
             string month = DateTime.Now.ToString("MM");
             string date = DateTime.Now.ToString("dd");
-            //date = "22";
             string year = DateTime.Now.ToString("yyyy");
             
             //assemble the root directory on mlb.com based on today's date
             string todaysURL = "http://gd2.mlb.com/components/game/mlb/year_" + year + "/month_" + month + "/day_" + date + "/";
 
-
             //this XML file has details on today's games, find the game id where Tampa Bay is playing
             String URLString = todaysURL + "epg.xml";
-            Console.WriteLine(URLString);
             XmlTextReader reader = new XmlTextReader(URLString);
 
             XmlDocument doc = new XmlDocument();
-            doc.Load(URLString);
-
-            string gameid = "";
-           
+            doc.Load(URLString);                       
             XmlElement root = doc.DocumentElement;
 
-            gameid = root.SelectSingleNode("game[@away_name_abbrev='TB' or @home_name_abbrev='TB']/@id").InnerText;
-            DateTime gametime = Convert.ToDateTime(root.SelectSingleNode("game[@id='" + gameid + "']/@start").InnerText);
+            XmlNode gameNode = root.SelectSingleNode("game[@away_name_abbrev='TB' or @home_name_abbrev='TB']");
+            XmlAttributeCollection gameDetails = gameNode.Attributes;
+
+            string gameid = gameDetails.GetNamedItem("id").Value;
+            DateTime gametime = Convert.ToDateTime(gameDetails.GetNamedItem("start").Value);
+
+            string home_team_name = gameDetails.GetNamedItem("home_team_name").Value;
+            string away_team_name = gameDetails.GetNamedItem("away_team_name").Value;
+            string venue = gameDetails.GetNamedItem("venue").Value;
+            string home_time = gameDetails.GetNamedItem("home_time").Value;
+            string home_ampm = gameDetails.GetNamedItem("home_ampm").Value;
+            string home_time_zone = gameDetails.GetNamedItem("home_time_zone").Value;
+            string home_win = gameDetails.GetNamedItem("home_win").Value;
+            string home_loss = gameDetails.GetNamedItem("home_loss").Value;
+            string away_win = gameDetails.GetNamedItem("away_win").Value;
+            string away_loss = gameDetails.GetNamedItem("away_loss").Value;
+
+            string homeStats = home_team_name + " (" + home_win + "-" + home_loss + ") ";
+            string awayStats = away_team_name + " (" + away_win + "-" + away_loss + ") ";
+
             Console.WriteLine("The next Tampa Bay Rays game is at: " + gametime);
+            SendTweet(awayStats + " visit " + homeStats + " at " + venue + ", game time " + home_time + " " + home_ampm + " " + home_time_zone);
+            
 
             TimeSpan idletime = gametime.Subtract(DateTime.Now.AddMinutes(5));  
             if(idletime.Ticks > 0)
@@ -95,59 +112,59 @@ namespace ZobristAtBat
             curGameStatus = root.SelectSingleNode("@status_ind").InnerText;
 
             //if the game isn't final
-            while (curGameStatus != "F" && curGameStatus != "O")
+            while (curGameStatus != "O" && curGameStatus != "F")
             {
-                tweet = "";
-                curBatterId = root.SelectSingleNode("players/batter/@pid").InnerText;
-                if (curBatterId == ZOBRIST_ID)
+                if (curGameStatus == "I")
                 {
-                    if (curStatus != AT_BAT)
+                    tweet = "";
+                    curBatterId = root.SelectSingleNode("players/batter/@pid").InnerText;
+                    if (curBatterId == PLAYER_ID)
                     {
-                        tweet = curDateStr + " - Ben Zobrist is at bat for the " + GetAtBatString(curAtBat) + " time!";
-                        curStatus = AT_BAT;
-                        curAtBat += 1;
-                    }
-                }
-                else
-                {
-                    //curBatterId is now used for on deck
-                    curBatterId = root.SelectSingleNode("players/deck/@pid").InnerText;
-                    if (curBatterId == ZOBRIST_ID)
-                    {
-                        if (curStatus != ON_DECK)
+                        if (curStatus != AT_BAT)
                         {
-                            tweet = curDateStr + " - Ben Zobrist is on deck for his " + GetAtBatString(curAtBat) + " at bat!";
-                            curStatus = ON_DECK;
-
+                            tweet = curDateStr + " - Ben Zobrist is at bat for the " + GetAtBatString(curAtBat) + " time!";
+                            curStatus = AT_BAT;
+                            curAtBat += 1;
                         }
                     }
                     else
                     {
-                        //curBatterId is now used for in the hole
-                        curBatterId = root.SelectSingleNode("players/hole/@pid").InnerText;
-                        if (curBatterId == ZOBRIST_ID)
+                        //curBatterId is now used for on deck
+                        curBatterId = root.SelectSingleNode("players/deck/@pid").InnerText;
+                        if (curBatterId == PLAYER_ID)
                         {
-                            if (curStatus != IN_THE_HOLE)
+                            if (curStatus != ON_DECK)
                             {
-                                tweet = curDateStr + " - Ben Zobrist is in the hole for his " + GetAtBatString(curAtBat) + " at bat!";
-                                curStatus = IN_THE_HOLE;
+                                tweet = curDateStr + " - Ben Zobrist is on deck for his " + GetAtBatString(curAtBat) + " at bat!";
+                                curStatus = ON_DECK;
+                            }
+                        }
+                        else
+                        {
+                            //curBatterId is now used for in the hole
+                            curBatterId = root.SelectSingleNode("players/hole/@pid").InnerText;
+                            if (curBatterId == PLAYER_ID)
+                            {
+                                if (curStatus != IN_THE_HOLE)
+                                {
+                                    tweet = curDateStr + " - Ben Zobrist is in the hole for his " + GetAtBatString(curAtBat) + " at bat!";
+                                    curStatus = IN_THE_HOLE;
+                                }
                             }
                         }
                     }
+
+                    if (!string.IsNullOrEmpty(tweet))
+                    {
+                        SendTweet(tweet);
+                    }
+
+                    doc = new XmlDocument();
+                    doc.Load(URLString);
+                    root = doc.DocumentElement;
+
+                    curGameStatus = root.SelectSingleNode("@status_ind").InnerText;
                 }
-
-                if (!string.IsNullOrEmpty(tweet))
-                {
-                    SendTweet(tweet);
-                }
-
-                doc = new XmlDocument();
-                doc.Load(URLString);
-                root = doc.DocumentElement;
-
-                curGameStatus = root.SelectSingleNode("@status_ind").InnerText;
-
-
             }
 
             if (curGameStatus == "F" || curGameStatus == "O") 
@@ -156,7 +173,7 @@ namespace ZobristAtBat
                 doc.Load(URLString);
                 root = doc.DocumentElement;
 
-                XmlNode zobieNode = root.SelectSingleNode("batting/batter[@id='" + ZOBRIST_ID + "']");
+                XmlNode zobieNode = root.SelectSingleNode("batting/batter[@id='" + PLAYER_ID + "']");
 
                 if (zobieNode != null)
                 {
@@ -199,7 +216,6 @@ namespace ZobristAtBat
                             tweet = tweet + r + " SB ";
                         }
                     }
-                    Console.WriteLine(tweet);
                     SendTweet(tweet);
                 }                
             }
@@ -237,16 +253,23 @@ namespace ZobristAtBat
 
         private static void SendTweet(string tweet)
         {
-            TwitterClientInfo twitterClientInfo = new TwitterClientInfo();
-            twitterClientInfo.ConsumerKey = ConsumerKey; //Read ConsumerKey out of the app.config
-            twitterClientInfo.ConsumerSecret = ConsumerSecret; //Read the ConsumerSecret out the app.config
-            TwitterService twitterService = new TwitterService(twitterClientInfo);
+            if (DEBUG == false)
+            {
+                TwitterClientInfo twitterClientInfo = new TwitterClientInfo();
+                twitterClientInfo.ConsumerKey = ConsumerKey; //Read ConsumerKey out of the app.config
+                twitterClientInfo.ConsumerSecret = ConsumerSecret; //Read the ConsumerSecret out the app.config
+                TwitterService twitterService = new TwitterService(twitterClientInfo);
 
-            SendTweetOptions tweetOps = new SendTweetOptions() { Status = tweet };
-            twitterService.AuthenticateWith(AccessToken, AccessTokenSecret);
-            twitterService.SendTweet(tweetOps);
-            var responseText = twitterService.Response.Response;
-            Console.WriteLine("Tweet has been sent: " + tweet);
+                SendTweetOptions tweetOps = new SendTweetOptions() { Status = tweet };
+                twitterService.AuthenticateWith(AccessToken, AccessTokenSecret);
+                twitterService.SendTweet(tweetOps);
+                var responseText = twitterService.Response.Response;
+                Console.WriteLine("Tweet has been sent: " + tweet);
+            }
+            else
+            {
+                Console.WriteLine(tweet);
+            }
         }
     }
 }
