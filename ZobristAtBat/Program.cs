@@ -52,6 +52,8 @@ namespace ZobristAtBat
             string todaysURL = "http://gd2.mlb.com/components/game/mlb/year_" + year + "/month_" + month + "/day_" + date + "/";
 
             //this XML file has details on today's games, find the game id where Tampa Bay is playing
+            string TodaysGameURL =  "";
+            string BatterURL = "";
             String URLString = todaysURL + "epg.xml";
             XmlTextReader reader = new XmlTextReader(URLString);
 
@@ -63,30 +65,6 @@ namespace ZobristAtBat
             XmlAttributeCollection gameDetails = gameNode.Attributes;
 
             string gameid = gameDetails.GetNamedItem("id").Value;
-            DateTime gametime = Convert.ToDateTime(gameDetails.GetNamedItem("start").Value);
-
-            string home_team_name = gameDetails.GetNamedItem("home_team_name").Value;
-            string away_team_name = gameDetails.GetNamedItem("away_team_name").Value;
-            string venue = gameDetails.GetNamedItem("venue").Value;
-            string home_time = gameDetails.GetNamedItem("home_time").Value;
-            string home_ampm = gameDetails.GetNamedItem("home_ampm").Value;
-            string home_time_zone = gameDetails.GetNamedItem("home_time_zone").Value;
-            string home_win = gameDetails.GetNamedItem("home_win").Value;
-            string home_loss = gameDetails.GetNamedItem("home_loss").Value;
-            string away_win = gameDetails.GetNamedItem("away_win").Value;
-            string away_loss = gameDetails.GetNamedItem("away_loss").Value;
-
-            string homeStats = home_team_name + " (" + home_win + "-" + home_loss + ") ";
-            string awayStats = away_team_name + " (" + away_win + "-" + away_loss + ") ";
-
-            Console.WriteLine("The next Tampa Bay Rays game is at: " + gametime);
-            SendTweet(awayStats + " visit " + homeStats + " at " + venue + ", game time " + home_time + " " + home_ampm + " " + home_time_zone);
-            
-
-            TimeSpan idletime = gametime.Subtract(DateTime.Now.AddMinutes(5));  
-            if(idletime.Ticks > 0)
-                Thread.Sleep(idletime);
-
 
             //this will open the plays.xml file (this xml file has the real time at bat data)
             if (gameid != "")
@@ -95,7 +73,9 @@ namespace ZobristAtBat
                 gameid = gameid.Replace("-", "_");
                 gameid = "gid_" + gameid;
 
-                URLString = todaysURL + gameid + "/plays.xml";
+                TodaysGameURL = todaysURL + gameid;
+                URLString = TodaysGameURL + "/plays.xml";
+                BatterURL = TodaysGameURL + "/batters/" + PLAYER_ID + ".xml";
                 //debug
                 //URLString = "http://gd2.mlb.com/components/game/mlb/year_2013/month_07/day_19/gid_2013_07_19_tbamlb_tormlb_1/plays.xml";
                 doc = new XmlDocument();
@@ -106,17 +86,52 @@ namespace ZobristAtBat
             string tweet = "";
             string curBatterId = "";
             string curGameStatus = "";
+            string lastGameStatus = "";
             string curDateStr = DateTime.Today.Date.ToShortDateString();
             int curStatus = PICKING_ASS_IN_DUGOUT;
             int curAtBat = 1;
             curGameStatus = root.SelectSingleNode("@status_ind").InnerText;
 
-            //if the game isn't final
-            while (curGameStatus != "O" && curGameStatus != "F")
+            if (curGameStatus != "O" && curGameStatus != "F" && curGameStatus != "DR")
             {
-                if (curGameStatus == "I")
+                DateTime gametime = Convert.ToDateTime(gameDetails.GetNamedItem("start").Value);
+
+                string home_team_name = gameDetails.GetNamedItem("home_team_name").Value;
+                string away_team_name = gameDetails.GetNamedItem("away_team_name").Value;
+                string venue = gameDetails.GetNamedItem("venue").Value;
+                string home_time = gameDetails.GetNamedItem("home_time").Value;
+                string home_ampm = gameDetails.GetNamedItem("home_ampm").Value;
+                string home_time_zone = gameDetails.GetNamedItem("home_time_zone").Value;
+                string home_win = gameDetails.GetNamedItem("home_win").Value;
+                string home_loss = gameDetails.GetNamedItem("home_loss").Value;
+                string away_win = gameDetails.GetNamedItem("away_win").Value;
+                string away_loss = gameDetails.GetNamedItem("away_loss").Value;
+
+                string homeStats = home_team_name + " (" + home_win + "-" + home_loss + ") ";
+                string awayStats = away_team_name + " (" + away_win + "-" + away_loss + ") ";
+
+                Console.WriteLine("The next Tampa Bay Rays game is at: " + gametime);
+                SendTweet(awayStats + " visit " + homeStats + " at " + venue + ", game time " + home_time + " " + home_ampm + " " + home_time_zone);
+
+
+                TimeSpan idletime = gametime.Subtract(DateTime.Now.AddMinutes(5));
+                if (idletime.Ticks > 0)
+                    Thread.Sleep(idletime);
+            }
+
+
+           
+            //if the game isn't final
+            while (curGameStatus != "O" && curGameStatus != "F" && curGameStatus != "DR")
+            {
+                tweet = "";
+                if (curGameStatus == "PR" && lastGameStatus != "PR")
                 {
-                    tweet = "";
+                    tweet = curDateStr + " - The game has been delayed.";
+                }
+                else if (curGameStatus == "I")
+                {
+                    
                     curBatterId = root.SelectSingleNode("players/batter/@pid").InnerText;
                     if (curBatterId == PLAYER_ID)
                     {
@@ -151,9 +166,18 @@ namespace ZobristAtBat
                                     curStatus = IN_THE_HOLE;
                                 }
                             }
+                            else
+                            {
+                                if (curStatus == AT_BAT)
+                                {
+                                    //get the last atbat stats
+                                    tweet = curDateStr = " - Ben Zobrist had a " + GetAtBatOutcomeString(curAtBat, BatterURL) + " in his " + GetAtBatString(curAtBat) + " at bat!";
+                                    curStatus = PICKING_ASS_IN_DUGOUT;
+                                }
+                            }
                         }
                     }
-
+                }
                     if (!string.IsNullOrEmpty(tweet))
                     {
                         SendTweet(tweet);
@@ -162,9 +186,9 @@ namespace ZobristAtBat
                     doc = new XmlDocument();
                     doc.Load(URLString);
                     root = doc.DocumentElement;
-
+                    lastGameStatus = curGameStatus;
                     curGameStatus = root.SelectSingleNode("@status_ind").InnerText;
-                }
+                
             }
 
             if (curGameStatus == "F" || curGameStatus == "O") 
@@ -201,17 +225,17 @@ namespace ZobristAtBat
                             tweet = tweet + r + " runs ";
                         }
 
-                        if (hr < 0)
+                        if (hr > 0)
                         {
                             tweet = tweet + r + " HR ";
                         }
 
-                        if (rbi < 0)
+                        if (rbi > 0)
                         {
                             tweet = tweet + r + " RBI ";
                         }
 
-                        if (sb < 0)
+                        if (sb > 0)
                         {
                             tweet = tweet + r + " SB ";
                         }
@@ -219,7 +243,11 @@ namespace ZobristAtBat
                     SendTweet(tweet);
                 }                
             }
-
+            else if (curGameStatus == "DR")
+            {
+                tweet = curDateStr + " - The game has been postponed!";
+                SendTweet(tweet);
+            }
             Console.WriteLine("Game has ended.");
 
             // Keep the console window open in debug mode.
@@ -249,6 +277,22 @@ namespace ZobristAtBat
                     break;
             }
             return ret;
+        }
+
+        private static string GetAtBatOutcomeString(int curAtBat, string xml)
+        {
+            string outcome = "";
+            string ret = "";
+            XmlDocument batterDoc = new XmlDocument();
+            batterDoc.Load(xml);
+            XmlElement root = batterDoc.DocumentElement;
+            XmlNodeList zobieNodes = root.SelectNodes("atbats/ab/@event");
+            if (zobieNodes.Count >= curAtBat)
+            {
+                outcome = zobieNodes[curAtBat - 1].InnerText;
+            }
+
+            return outcome;
         }
 
         private static void SendTweet(string tweet)
