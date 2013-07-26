@@ -47,6 +47,28 @@ namespace ZobristAtBat
             string month = DateTime.Now.ToString("MM");
             string date = DateTime.Now.ToString("dd");
             string year = DateTime.Now.ToString("yyyy");
+                
+            //batters XML file
+            string batterXML = "http://gd2.mlb.com/components/game/mlb/year_" + year + "/batters/" + PLAYER_ID + ".xml";
+            XmlDocument doc = new XmlDocument();
+            doc.Load(batterXML);
+            XmlElement root = doc.DocumentElement;
+
+            string batterLastGameID = root.SelectSingleNode("@game_id").InnerText;
+            string[] batterLastGameArray = batterLastGameID.Split(new Char[] { '/' });
+
+            batterLastGameID = batterLastGameID.Replace("/", "_");
+            batterLastGameID = batterLastGameID.Replace("-", "_");
+            batterLastGameID = "gid_" + batterLastGameID;
+
+
+            string lastGameURL = "http://gd2.mlb.com/components/game/mlb/year_" + batterLastGameArray[0] + "/month_" + batterLastGameArray[1] + "/day_" + batterLastGameArray[2] + "/" + batterLastGameID + "/players.xml";
+            doc.Load(lastGameURL);
+            root = doc.DocumentElement;
+            XmlAttributeCollection batterTeamAttr = root.SelectSingleNode("team/player[@id='" + PLAYER_ID + "']").ParentNode.Attributes;
+
+            string batterTeamID = batterTeamAttr.GetNamedItem("id").Value;
+            
             
             //assemble the root directory on mlb.com based on today's date
             string todaysURL = "http://gd2.mlb.com/components/game/mlb/year_" + year + "/month_" + month + "/day_" + date + "/";
@@ -55,13 +77,11 @@ namespace ZobristAtBat
             string TodaysGameURL =  "";
             string BatterURL = "";
             String URLString = todaysURL + "epg.xml";
-            XmlTextReader reader = new XmlTextReader(URLString);
-
-            XmlDocument doc = new XmlDocument();
+            
             doc.Load(URLString);                       
-            XmlElement root = doc.DocumentElement;
+            root = doc.DocumentElement;
 
-            XmlNode gameNode = root.SelectSingleNode("game[@away_name_abbrev='TB' or @home_name_abbrev='TB']");
+            XmlNode gameNode = root.SelectSingleNode("game[@away_name_abbrev='" + batterTeamID + "' or @home_name_abbrev='" + batterTeamID + "']");
             XmlAttributeCollection gameDetails = gameNode.Attributes;
 
             string gameid = gameDetails.GetNamedItem("id").Value;
@@ -78,7 +98,6 @@ namespace ZobristAtBat
                 BatterURL = TodaysGameURL + "/batters/" + PLAYER_ID + ".xml";
                 //debug
                 //URLString = "http://gd2.mlb.com/components/game/mlb/year_2013/month_07/day_19/gid_2013_07_19_tbamlb_tormlb_1/plays.xml";
-                doc = new XmlDocument();
                 doc.Load(URLString);
                 root = doc.DocumentElement;
             }
@@ -111,16 +130,15 @@ namespace ZobristAtBat
                 string awayStats = away_team_name + " (" + away_win + "-" + away_loss + ") ";
 
                 Console.WriteLine("The next Tampa Bay Rays game is at: " + gametime);
-                SendTweet(awayStats + " visit " + homeStats + " at " + venue + ", game time " + home_time + " " + home_ampm + " " + home_time_zone);
-
 
                 TimeSpan idletime = gametime.Subtract(DateTime.Now.AddMinutes(5));
                 if (idletime.Ticks > 0)
                     Thread.Sleep(idletime);
+
+                SendTweet(awayStats + " visit " + homeStats + " at " + venue + ", game time " + home_time + " " + home_ampm + " " + home_time_zone);
             }
 
 
-           
             //if the game isn't final
             while (curGameStatus != "O" && curGameStatus != "F" && curGameStatus != "DR")
             {
@@ -183,7 +201,6 @@ namespace ZobristAtBat
                         SendTweet(tweet);
                     }
 
-                    doc = new XmlDocument();
                     doc.Load(URLString);
                     root = doc.DocumentElement;
                     lastGameStatus = curGameStatus;
@@ -197,11 +214,11 @@ namespace ZobristAtBat
                 doc.Load(URLString);
                 root = doc.DocumentElement;
 
-                XmlNode zobieNode = root.SelectSingleNode("batting/batter[@id='" + PLAYER_ID + "']");
+                XmlNode batterNode = root.SelectSingleNode("batting/batter[@id='" + PLAYER_ID + "']");
 
-                if (zobieNode != null)
+                if (batterNode != null)
                 {
-                    XmlAttributeCollection zobieStats = zobieNode.Attributes;
+                    XmlAttributeCollection zobieStats = batterNode.Attributes;
                   
                     int hits = Convert.ToInt32(zobieStats.GetNamedItem("h").Value);
                     int ab = Convert.ToInt32(zobieStats.GetNamedItem("ab").Value);
@@ -282,7 +299,6 @@ namespace ZobristAtBat
         private static string GetAtBatOutcomeString(int curAtBat, string xml)
         {
             string outcome = "";
-            string ret = "";
             XmlDocument batterDoc = new XmlDocument();
             batterDoc.Load(xml);
             XmlElement root = batterDoc.DocumentElement;
