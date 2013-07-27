@@ -142,6 +142,7 @@ namespace ZobristAtBat
             //if the game isn't final
             while (curGameStatus != "O" && curGameStatus != "F" && curGameStatus != "DR")
             {
+                try{
                 tweet = "";
                 if (curGameStatus == "PR" && lastGameStatus != "PR")
                 {
@@ -149,7 +150,7 @@ namespace ZobristAtBat
                 }
                 else if (curGameStatus == "I")
                 {
-                    
+
                     curBatterId = root.SelectSingleNode("players/batter/@pid").InnerText;
                     if (curBatterId == PLAYER_ID)
                     {
@@ -189,12 +190,17 @@ namespace ZobristAtBat
                                 if (curStatus == AT_BAT)
                                 {
                                     //get the last atbat stats
-                                    tweet = curDateStr = " - Ben Zobrist had a " + GetAtBatOutcomeString(curAtBat, BatterURL) + " in his " + GetAtBatString(curAtBat) + " at bat!";
-                                    curStatus = PICKING_ASS_IN_DUGOUT;
+                                    string outcome = GetAtBatOutcomeString(curAtBat - 1, BatterURL);
+                                    if (!string.IsNullOrEmpty(outcome))
+                                    {
+                                        tweet = curDateStr + " - Ben Zobrist had a " + outcome + " in his " + GetAtBatString(curAtBat - 1) + " at bat!";
+                                        curStatus = PICKING_ASS_IN_DUGOUT;
+                                    }
                                 }
                             }
                         }
                     }
+
                 }
                     if (!string.IsNullOrEmpty(tweet))
                     {
@@ -205,6 +211,11 @@ namespace ZobristAtBat
                     root = doc.DocumentElement;
                     lastGameStatus = curGameStatus;
                     curGameStatus = root.SelectSingleNode("@status_ind").InnerText;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Oops, there was an error: " + ex);
+                }
                 
             }
 
