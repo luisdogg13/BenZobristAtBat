@@ -37,208 +37,167 @@ namespace ZobristAtBat
         //Zobrist: 450314
         private const string PLAYER_ID = "450314";
 
-        private const int IN_THE_HOLE = 1;
-        private const int ON_DECK = 2;
-        private const int AT_BAT = 3;
-        private const int PICKING_ASS_IN_DUGOUT = 4;
-
         static void Main(string[] args)
         {
             string month = DateTime.Now.ToString("MM");
             string date = DateTime.Now.ToString("dd");
-            string year = DateTime.Now.ToString("yyyy");
-                
-            //batters XML file
-            string batterXML = "http://gd2.mlb.com/components/game/mlb/year_" + year + "/batters/" + PLAYER_ID + ".xml";
-            XmlDocument doc = new XmlDocument();
-            doc.Load(batterXML);
-            XmlElement root = doc.DocumentElement;
+            string year = DateTime.Now.ToString("yyyy");            
+            string currentDate = DateTime.Today.Date.ToShortDateString();
+            string tweet = "";
 
-            string batterLastGameID = root.SelectSingleNode("@game_id").InnerText;
-            string[] batterLastGameArray = batterLastGameID.Split(new Char[] { '/' });
-
-            batterLastGameID = batterLastGameID.Replace("/", "_");
-            batterLastGameID = batterLastGameID.Replace("-", "_");
-            batterLastGameID = "gid_" + batterLastGameID;
-
-
-            string lastGameURL = "http://gd2.mlb.com/components/game/mlb/year_" + batterLastGameArray[0] + "/month_" + batterLastGameArray[1] + "/day_" + batterLastGameArray[2] + "/" + batterLastGameID + "/players.xml";
-            doc.Load(lastGameURL);
-            root = doc.DocumentElement;
-            XmlAttributeCollection batterTeamAttr = root.SelectSingleNode("team/player[@id='" + PLAYER_ID + "']").ParentNode.Attributes;
-
-            string batterTeamID = batterTeamAttr.GetNamedItem("id").Value;
-            
+            string batterTeamID = GetPlayerTeamID(PLAYER_ID);
             
             //assemble the root directory on mlb.com based on today's date
-            string todaysURL = "http://gd2.mlb.com/components/game/mlb/year_" + year + "/month_" + month + "/day_" + date + "/";
+            string todayRootURL = "http://gd2.mlb.com/components/game/mlb/year_" + year + "/month_" + month + "/day_" + date + "/";
 
-            //this XML file has details on today's games, find the game id where Tampa Bay is playing
-            string TodaysGameURL =  "";
-            string BatterURL = "";
-            String URLString = todaysURL + "epg.xml";
+            //this XML file has details on today's games, find the game id where batter's team is playing
+            XmlDocument documentScoreboard = new XmlDocument();
+            documentScoreboard.Load(todayRootURL + "/miniscoreboard.xml");
+            XmlElement elementScoreboard = documentScoreboard.DocumentElement;
+            XmlNode gameScoreboardNode = elementScoreboard.SelectSingleNode("game[@away_name_abbrev='" + batterTeamID + "' or @home_name_abbrev='" + batterTeamID + "']");
+            XmlAttributeCollection gameScoreboardAttributes = gameScoreboardNode.Attributes;
+
+            string gameid = gameScoreboardAttributes["id"].Value;
+            DateTime gametime = Convert.ToDateTime(gameScoreboardAttributes["time_date"].Value);
+
+            string home_team_name = gameScoreboardAttributes["home_team_name"].Value;
+            string away_team_name = gameScoreboardAttributes["away_team_name"].Value;
+            string venue = gameScoreboardAttributes["venue"].Value;
+            string home_time = gameScoreboardAttributes["home_time"].Value;
+            string home_ampm = gameScoreboardAttributes["home_ampm"].Value;
+            string home_time_zone = gameScoreboardAttributes["home_time_zone"].Value;
+            string home_win = gameScoreboardAttributes["home_win"].Value;
+            string home_loss = gameScoreboardAttributes["home_loss"].Value;
+            string away_win = gameScoreboardAttributes["away_win"].Value;
+            string away_loss = gameScoreboardAttributes["away_loss"].Value;
+
+            string homeStats = home_team_name + " (" + home_win + "-" + home_loss + ")";
+            string awayStats = away_team_name + " (" + away_win + "-" + away_loss + ")";
+
+            SendTweet(awayStats + " visit " + homeStats + " at " + venue + ", game time " + home_time + " " + home_ampm + " " + home_time_zone);
+
+            string game_data_directory = todayRootURL + "gid_" + gameScoreboardAttributes["gameday_link"].Value;            
+
+            XmlDocument documentPlays = new XmlDocument();
+            documentPlays.Load(game_data_directory + "/plays.xml");
+
+            string currentGameStatus = documentPlays.SelectSingleNode("game").Attributes["status_ind"].Value;
             
-            doc.Load(URLString);                       
-            root = doc.DocumentElement;
+            string gameAtBatCount = "";
+            string gamePreviousAtBatCount = "";
+            string batterAtBat = "";
+            string batterOnDeck = "";
+            string batterInHole = "";
+            int batterAtBatCount = 0;
+            int BatterEventAtBat = 0;
+            bool getBatterEvent = false;
 
-            XmlNode gameNode = root.SelectSingleNode("game[@away_name_abbrev='" + batterTeamID + "' or @home_name_abbrev='" + batterTeamID + "']");
-            XmlAttributeCollection gameDetails = gameNode.Attributes;
+            //tracks how many hits we make to the XML file
+            int counter = 0;
 
-            string gameid = gameDetails.GetNamedItem("id").Value;
+            //used for player name
+            XmlDocument documentBatter = new XmlDocument();
+            documentBatter.Load(game_data_directory + "/batters/" + PLAYER_ID + ".xml");
+            string playerName = documentBatter.SelectSingleNode("Player").Attributes["first_name"].Value
+                + " " + documentBatter.SelectSingleNode("Player").Attributes["last_name"].Value;
 
-            //this will open the plays.xml file (this xml file has the real time at bat data)
-            if (gameid != "")
+            //used to get at bat event description
+            XmlDocument documentBatterEvent = new XmlDocument();
+
+            while (currentGameStatus != "O" || currentGameStatus != "F")
             {
-                gameid = gameid.Replace("/", "_");
-                gameid = gameid.Replace("-", "_");
-                gameid = "gid_" + gameid;
-
-                TodaysGameURL = todaysURL + gameid;
-                URLString = TodaysGameURL + "/plays.xml";
-                BatterURL = TodaysGameURL + "/batters/" + PLAYER_ID + ".xml";
-                //debug
-                //URLString = "http://gd2.mlb.com/components/game/mlb/year_2013/month_07/day_19/gid_2013_07_19_tbamlb_tormlb_1/plays.xml";
-                doc.Load(URLString);
-                root = doc.DocumentElement;
-            }
-
-            string tweet = "";
-            string curBatterId = "";
-            string curGameStatus = "";
-            string lastGameStatus = "";
-            string curDateStr = DateTime.Today.Date.ToShortDateString();
-            int curStatus = PICKING_ASS_IN_DUGOUT;
-            int curAtBat = 1;
-            curGameStatus = root.SelectSingleNode("@status_ind").InnerText;
-
-            if (curGameStatus != "O" && curGameStatus != "F" && curGameStatus != "DR")
-            {
-                DateTime gametime = Convert.ToDateTime(gameDetails.GetNamedItem("start").Value);
-
-                string home_team_name = gameDetails.GetNamedItem("home_team_name").Value;
-                string away_team_name = gameDetails.GetNamedItem("away_team_name").Value;
-                string venue = gameDetails.GetNamedItem("venue").Value;
-                string home_time = gameDetails.GetNamedItem("home_time").Value;
-                string home_ampm = gameDetails.GetNamedItem("home_ampm").Value;
-                string home_time_zone = gameDetails.GetNamedItem("home_time_zone").Value;
-                string home_win = gameDetails.GetNamedItem("home_win").Value;
-                string home_loss = gameDetails.GetNamedItem("home_loss").Value;
-                string away_win = gameDetails.GetNamedItem("away_win").Value;
-                string away_loss = gameDetails.GetNamedItem("away_loss").Value;
-
-                string homeStats = home_team_name + " (" + home_win + "-" + home_loss + ") ";
-                string awayStats = away_team_name + " (" + away_win + "-" + away_loss + ") ";
-
-                Console.WriteLine("The next Tampa Bay Rays game is at: " + gametime);
-
-                TimeSpan idletime = gametime.Subtract(DateTime.Now.AddMinutes(5));
-                if (idletime.Ticks > 0)
-                    Thread.Sleep(idletime);
-
-                SendTweet(awayStats + " visit " + homeStats + " at " + venue + ", game time " + home_time + " " + home_ampm + " " + home_time_zone);
-            }
-
-
-            //if the game isn't final
-            while (curGameStatus != "O" && curGameStatus != "F" && curGameStatus != "DR")
-            {
-                try{
-                tweet = "";
-                if (curGameStatus == "PR" && lastGameStatus != "PR")
+                if (currentGameStatus == "DR")
                 {
-                    tweet = curDateStr + " - The game has been delayed.";
+                    tweet = currentDate + " - The game has been postponed.";
+                    SendTweet(tweet);
+                    break;
                 }
-                else if (curGameStatus == "I")
-                {
 
-                    curBatterId = root.SelectSingleNode("players/batter/@pid").InnerText;
-                    if (curBatterId == PLAYER_ID)
+                if (currentGameStatus == "PR")
+                {
+                    tweet = currentDate + " - The game has been delayed.";
+                    SendTweet(tweet);
+                    while (currentGameStatus == "PR")
                     {
-                        if (curStatus != AT_BAT)
-                        {
-                            tweet = curDateStr + " - Ben Zobrist is at bat for the " + GetAtBatString(curAtBat) + " time!";
-                            curStatus = AT_BAT;
-                            curAtBat += 1;
-                        }
+                        documentPlays.Load(game_data_directory + "/plays.xml");
+                        currentGameStatus = documentPlays.SelectSingleNode("game").Attributes["status_ind"].Value;
+                        Thread.Sleep(60000);
                     }
-                    else
+                }
+
+                if (gamePreviousAtBatCount != gameAtBatCount)
+                {
+                    batterAtBat = documentPlays.SelectSingleNode("game/players/batter").Attributes["pid"].Value;
+                    batterOnDeck = documentPlays.SelectSingleNode("game/players/deck").Attributes["pid"].Value;
+                    batterInHole = documentPlays.SelectSingleNode("game/players/hole").Attributes["pid"].Value;
+
+                    if (getBatterEvent == true)
                     {
-                        //curBatterId is now used for on deck
-                        curBatterId = root.SelectSingleNode("players/deck/@pid").InnerText;
-                        if (curBatterId == PLAYER_ID)
-                        {
-                            if (curStatus != ON_DECK)
-                            {
-                                tweet = curDateStr + " - Ben Zobrist is on deck for his " + GetAtBatString(curAtBat) + " at bat!";
-                                curStatus = ON_DECK;
-                            }
-                        }
-                        else
-                        {
-                            //curBatterId is now used for in the hole
-                            curBatterId = root.SelectSingleNode("players/hole/@pid").InnerText;
-                            if (curBatterId == PLAYER_ID)
-                            {
-                                if (curStatus != IN_THE_HOLE)
-                                {
-                                    tweet = curDateStr + " - Ben Zobrist is in the hole for his " + GetAtBatString(curAtBat) + " at bat!";
-                                    curStatus = IN_THE_HOLE;
-                                }
-                            }
-                            else
-                            {
-                                if (curStatus == AT_BAT)
-                                {
-                                    //get the last atbat stats
-                                    string outcome = GetAtBatOutcomeString(curAtBat - 1, BatterURL);
-                                    if (!string.IsNullOrEmpty(outcome))
-                                    {
-                                        tweet = curDateStr + " - Ben Zobrist had a " + outcome + " in his " + GetAtBatString(curAtBat - 1) + " at bat!";
-                                        curStatus = PICKING_ASS_IN_DUGOUT;
-                                    }
-                                }
-                            }
-                        }
+                        documentBatterEvent.Load(game_data_directory + "/game_events.xml");
+                        SendTweet(documentBatterEvent.SelectSingleNode("//atbat[@num='" + BatterEventAtBat + "']").Attributes["des"].Value);
                     }
 
-                }
-                    if (!string.IsNullOrEmpty(tweet))
+                    if (batterAtBat == PLAYER_ID)
                     {
-                        SendTweet(tweet);
+                        batterAtBatCount = documentPlays.SelectSingleNode("game/players/batter").ChildNodes.Count;
+                        SendTweet(playerName + " is at bat for the " + GetAtBatString(batterAtBatCount + 1) + " time!");
+
+                        getBatterEvent = true;
+                        BatterEventAtBat = Convert.ToInt32(gameAtBatCount);
                     }
 
-                    doc.Load(URLString);
-                    root = doc.DocumentElement;
-                    lastGameStatus = curGameStatus;
-                    curGameStatus = root.SelectSingleNode("@status_ind").InnerText;
+                    if (batterOnDeck == PLAYER_ID)
+                    {
+                        SendTweet(playerName + " is on deck.");
+                    }
+
+                    if (batterInHole == PLAYER_ID)
+                    {
+                        SendTweet(playerName + " is in the hole.");
+                    }
+                    Console.WriteLine("XML file reads: " + counter);
+                    Console.WriteLine("Game at bat number: " + gameAtBatCount);
+                    counter = 0;
                 }
-                catch (Exception ex)
+
+                documentPlays.Load(game_data_directory + "/plays.xml");
+                currentGameStatus = documentPlays.SelectSingleNode("game").Attributes["status_ind"].Value;
+                gamePreviousAtBatCount = gameAtBatCount;
+
+                if (documentPlays.SelectSingleNode("game/atbat") != null)
                 {
-                    Console.WriteLine("Oops, there was an error: " + ex);
+                    gameAtBatCount = documentPlays.SelectSingleNode("game/atbat").Attributes["num"].Value;
+                    if (currentGameStatus == "O" || currentGameStatus == "F")
+                    {
+                        break;
+                    }
                 }
                 
+                Thread.Sleep(10000);
+                counter += 1;
             }
 
-            if (curGameStatus == "F" || curGameStatus == "O") 
+            
+            if (currentGameStatus == "F" || currentGameStatus == "O") 
             {
-                URLString = todaysURL + gameid + "/boxscore.xml";
-                doc.Load(URLString);
-                root = doc.DocumentElement;
+                XmlDocument documentBoxScore = new XmlDocument();
+                documentBoxScore.Load(game_data_directory + "/boxscore.xml");
 
-                XmlNode batterNode = root.SelectSingleNode("batting/batter[@id='" + PLAYER_ID + "']");
+                XmlNode batterNode = documentBoxScore.SelectSingleNode("boxscore/batting/batter[@id='" + PLAYER_ID + "']");
+                string batterName = batterNode.Attributes["name_display_first_last"].Value;
 
                 if (batterNode != null)
                 {
-                    XmlAttributeCollection zobieStats = batterNode.Attributes;
-                  
-                    int hits = Convert.ToInt32(zobieStats.GetNamedItem("h").Value);
-                    int ab = Convert.ToInt32(zobieStats.GetNamedItem("ab").Value);
-                    int r = Convert.ToInt32(zobieStats.GetNamedItem("r").Value);
-                    int hr = Convert.ToInt32(zobieStats.GetNamedItem("hr").Value);
-                    int rbi = Convert.ToInt32(zobieStats.GetNamedItem("rbi").Value);
-                    int sb = Convert.ToInt32(zobieStats.GetNamedItem("sb").Value);
+                    XmlAttributeCollection batterStats = batterNode.Attributes;
 
-                    tweet = "That's the ballgame! Ben Zobrist went " + hits + "/" + ab;
+                    int hits = Convert.ToInt32(batterStats["h"].Value);
+                    int ab = Convert.ToInt32(batterStats["ab"].Value);
+                    int r = Convert.ToInt32(batterStats["r"].Value);
+                    int hr = Convert.ToInt32(batterStats["hr"].Value);
+                    int rbi = Convert.ToInt32(batterStats["rbi"].Value);
+                    int sb = Convert.ToInt32(batterStats["sb"].Value);
+
+                    tweet = "That's the ballgame! " + batterName + " went " + hits + "/" + ab;
 
                     if (r > 0 || hr > 0 || rbi > 0 || sb > 0)
                     {
@@ -255,27 +214,27 @@ namespace ZobristAtBat
 
                         if (hr > 0)
                         {
-                            tweet = tweet + r + " HR ";
+                            tweet = tweet + hr + " HR ";
                         }
 
                         if (rbi > 0)
                         {
-                            tweet = tweet + r + " RBI ";
+                            tweet = tweet + rbi + " RBI ";
                         }
 
                         if (sb > 0)
                         {
-                            tweet = tweet + r + " SB ";
+                            tweet = tweet + sb + " SB ";
                         }
                     }
-                    SendTweet(tweet);
-                }                
-            }
-            else if (curGameStatus == "DR")
-            {
-                tweet = curDateStr + " - The game has been postponed!";
+                }
+                else
+                {
+                    tweet = batterName + " did not play in today's game.";
+                }
                 SendTweet(tweet);
             }
+
             Console.WriteLine("Game has ended.");
 
             // Keep the console window open in debug mode.
@@ -283,6 +242,29 @@ namespace ZobristAtBat
             Console.ReadKey();
         }
 
+        private static string GetPlayerTeamID(string playerID)
+        {
+            //batters XML file
+            string batterURL = "http://gd2.mlb.com/components/game/mlb/year_" + DateTime.Now.ToString("yyyy") + "/batters/" + PLAYER_ID + ".xml";
+            XmlDocument doc = new XmlDocument();
+            doc.Load(batterURL);
+            XmlElement root = doc.DocumentElement;
+
+            string batterLastGameID = root.SelectSingleNode("@game_id").InnerText;
+            string[] batterLastGameArray = batterLastGameID.Split(new Char[] { '/' });
+
+            batterLastGameID = batterLastGameID.Replace("/", "_");
+            batterLastGameID = batterLastGameID.Replace("-", "_");
+            batterLastGameID = "gid_" + batterLastGameID;
+
+            string lastGameURL = "http://gd2.mlb.com/components/game/mlb/year_" + batterLastGameArray[0] + "/month_" + batterLastGameArray[1] + "/day_" + batterLastGameArray[2] + "/" + batterLastGameID + "/players.xml";
+            doc.Load(lastGameURL);
+            root = doc.DocumentElement;
+            XmlAttributeCollection batterTeamAttr = root.SelectSingleNode("team/player[@id='" + PLAYER_ID + "']").ParentNode.Attributes;
+
+            return batterTeamAttr["id"].Value;
+
+        }
 
         private static string GetAtBatString(int bat)
         {
