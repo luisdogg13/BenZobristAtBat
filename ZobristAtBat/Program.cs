@@ -57,6 +57,8 @@ namespace ZobristAtBat
                 documentScoreboard.Load(todayRootURL + "/miniscoreboard.xml");
                 XmlElement elementScoreboard = documentScoreboard.DocumentElement;
                 XmlNode gameScoreboardNode = elementScoreboard.SelectSingleNode("game[@away_name_abbrev='" + batterTeamID + "' or @home_name_abbrev='" + batterTeamID + "']");
+                
+                //TODO:  if no game found, handle appropriately
                 XmlAttributeCollection gameScoreboardAttributes = gameScoreboardNode.Attributes;
 
                 string home_team_name = gameScoreboardAttributes["home_team_name"].Value;
@@ -109,6 +111,7 @@ namespace ZobristAtBat
                 string playerName = documentBatter.SelectSingleNode("Player").Attributes["first_name"].Value
                     + " " + documentBatter.SelectSingleNode("Player").Attributes["last_name"].Value;
 
+                //to support starting the application mid game
                 int batterAtBatCount = documentBatter.SelectSingleNode("Player/atbats").ChildNodes.Count;
                 if (batterAtBatCount == 0)
                 {
@@ -121,6 +124,11 @@ namespace ZobristAtBat
 
                 //used to get at bat event description
                 XmlDocument documentBatterEvent = new XmlDocument();
+
+                if (documentPlays.SelectSingleNode("game/atbat") != null)
+                {
+                    gameAtBatCount = documentPlays.SelectSingleNode("game/atbat").Attributes["num"].Value;
+                }
 
                 while (currentGameStatus != "O" && currentGameStatus != "F")
                 {
@@ -153,7 +161,7 @@ namespace ZobristAtBat
                         {
                             documentBatterEvent.Load(game_data_directory + "/game_events.xml");
                             batterPlayDesc = documentBatterEvent.SelectSingleNode("//atbat[@num='" + (BatterEventAtBat) + "']").Attributes["des"].Value;
-                            SendTweet(batterPlayDesc.Split(new Char[] { '.' }).GetValue(0).ToString());
+                            SendTweet(currentDate + " " + batterPlayDesc.Split(new Char[] { '.' }).GetValue(0).ToString() + ".");
                             getBatterEvent = false;
                         }
 
@@ -176,6 +184,7 @@ namespace ZobristAtBat
                         {
                             SendTweet(currentDate + " " + playerName + " is in the hole for the " + GetAtBatString(batterAtBatCount) + " time.");
                         }
+
                         Console.WriteLine("Game at bat number: " + gameAtBatCount);
                         Console.WriteLine("XML file reads: " + counter);
                         Console.WriteLine("--------------------------------");
@@ -185,8 +194,11 @@ namespace ZobristAtBat
                     documentPlays.Load(game_data_directory + "/plays.xml");
                     currentGameStatus = documentPlays.SelectSingleNode("game").Attributes["status_ind"].Value;
                     gamePreviousAtBatCount = gameAtBatCount;
-                    
-                    gameAtBatCount = documentPlays.SelectSingleNode("game/atbat").Attributes["num"].Value;
+
+                    if (documentPlays.SelectSingleNode("game/atbat") != null)
+                    {
+                        gameAtBatCount = documentPlays.SelectSingleNode("game/atbat").Attributes["num"].Value;
+                    }
 
                     Thread.Sleep(10000);
                     counter += 1;
@@ -200,8 +212,23 @@ namespace ZobristAtBat
                     documentBoxScore.Load(game_data_directory + "/boxscore.xml");
 
                     XmlNode batterNode = documentBoxScore.SelectSingleNode("boxscore/batting/batter[@id='" + PLAYER_ID + "']");
-                    string batterName = batterNode.Attributes["name_display_first_last"].Value;
+                    XmlAttributeCollection linescoreAttributes = documentBoxScore.SelectSingleNode("boxscore/linescore").Attributes;
+                    int homeTeamScore = Convert.ToInt32(linescoreAttributes["home_team_runs"].Value);
+                    int awayTeamScore = Convert.ToInt32(linescoreAttributes["away_team_runs"].Value);
 
+                    if (homeTeamScore > awayTeamScore)
+                    {
+                        tweet = home_team_name + " defeat " + away_team_name + " " + homeTeamScore + " - " + awayTeamScore + ".";
+                        SendTweet(tweet);
+                    }
+                    else
+                    {
+                        tweet = away_team_name + " defeat " + home_team_name + " " + awayTeamScore + " - " + homeTeamScore + ".";
+                        SendTweet(tweet);
+                    }
+
+                    string batterName = batterNode.Attributes["name_display_first_last"].Value;
+                    
                     if (batterNode != null)
                     {
                         XmlAttributeCollection batterStats = batterNode.Attributes;
@@ -213,7 +240,7 @@ namespace ZobristAtBat
                         int rbi = Convert.ToInt32(batterStats["rbi"].Value);
                         int sb = Convert.ToInt32(batterStats["sb"].Value);
 
-                        tweet = "That's the ballgame! " + batterName + " went " + hits + "/" + ab;
+                        tweet = batterName + " went " + hits + "/" + ab;
 
                         if (r > 0 || hr > 0 || rbi > 0 || sb > 0)
                         {
@@ -260,6 +287,8 @@ namespace ZobristAtBat
             catch (Exception ex)
             {
                 Console.WriteLine("There was an error: " + ex.Message);
+                Console.WriteLine("Press any key to exit.");
+                Console.ReadKey();
             }
         }
 
