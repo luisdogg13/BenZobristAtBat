@@ -151,7 +151,7 @@ namespace ZobristAtBat
                         }
                     }
 
-                    if (gamePreviousAtBatCount != gameAtBatCount)
+                    if (gamePreviousAtBatCount != gameAtBatCount && gameAtBatCount != 0)
                     {
                         batterAtBat = documentPlays.SelectSingleNode("game/players/batter").Attributes["pid"].Value;
                         batterOnDeck = documentPlays.SelectSingleNode("game/players/deck").Attributes["pid"].Value;
@@ -161,7 +161,34 @@ namespace ZobristAtBat
                         {
                             documentBatterEvent.Load(game_data_directory + "/game_events.xml");
                             batterPlayDesc = documentBatterEvent.SelectSingleNode("//atbat[@num='" + (BatterEventAtBat) + "']").Attributes["des"].Value;
-                            SendTweet(currentDate + " " + batterPlayDesc.Split(new Char[] { '.' }).GetValue(0).ToString() + ".");
+                            
+
+                            string[] batterPlayArray = batterPlayDesc.Split(new Char[] { '.' });
+                            
+                            if (batterPlayDesc.Length > 140)
+                            {
+                                tweet = currentDate + " " + batterPlayArray[0].Split(new Char[] { ',' }).GetValue(0).ToString() + ".";
+                            }
+                            else
+                            {
+                                tweet = currentDate + " " + batterPlayArray[0];
+
+                                if (batterPlayArray[1].Length == 1)
+                                {
+                                    tweet = tweet + "." + batterPlayArray[1] + ".";
+                                }
+
+                                if (batterPlayArray[2].Contains(" "))
+                                {
+                                    tweet = tweet + ".";
+                                }
+                                else
+                                {
+                                    tweet = tweet + " " + batterPlayArray[2] + ".";
+                                }
+                            }
+
+                            SendTweet(tweet);
                             getBatterEvent = false;
                         }
 
