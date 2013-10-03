@@ -75,18 +75,41 @@ namespace ZobristAtBat
                 string homeStats = home_team_name + " (" + home_win + "-" + home_loss + ")";
                 string awayStats = away_team_name + " (" + away_win + "-" + away_loss + ")";
 
-                SendTweet(awayStats + " visit " + homeStats + " at " + venue + ", game time " + home_time + " " + home_ampm + " " + home_time_zone);
-
                 string game_data_directory = todayRootURL + "gid_" + gameScoreboardAttributes["gameday_link"].Value;
-
 
                 string gameid = gameScoreboardAttributes["id"].Value;
                 DateTime gametime = Convert.ToDateTime(gameScoreboardAttributes["time_date"].Value + gameScoreboardAttributes["ampm"].Value);
-                //sleep until gametime
-                TimeSpan idletime = gametime.Subtract(DateTime.Now.AddMinutes(5));
+                
+                //sleep until hour before gametime
+                TimeSpan idletime = gametime.Subtract(DateTime.Now.AddMinutes(60));
                 if (idletime.Ticks > 0)
                     Thread.Sleep(idletime);
 
+                //send game time preview
+                SendTweet(awayStats + " visit " + homeStats + " at " + venue + ", game time " + home_time + " " + home_ampm + " " + home_time_zone);
+                Console.WriteLine("--------------------------------");
+
+                //sleep until 15 minutes before gametime
+                idletime = gametime.Subtract(DateTime.Now.AddMinutes(15));
+                if (idletime.Ticks > 0)
+                    Thread.Sleep(idletime);
+                
+                //get player info for game
+                XmlDocument documentStartingLineup = new XmlDocument();
+                documentStartingLineup.Load(game_data_directory + "/boxscore.xml");
+                XmlNode nodeStartingLineup = documentStartingLineup.SelectSingleNode("boxscore/batting/batter[@id='" + PLAYER_ID + "']");
+
+                if (nodeStartingLineup != null)
+                {
+                    string battingOrder = nodeStartingLineup.Attributes["bo"].Value;
+                    string batter = nodeStartingLineup.Attributes["name_display_first_last"].Value;
+                    string batterPosition = nodeStartingLineup.Attributes["pos"].Value;
+
+                    tweet = currentDate + " " + batter + " is in the starting lineup at " + batterPosition + " batting in the " + battingOrder[0] + " spot.";
+                        
+                    SendTweet(tweet);
+                    Console.WriteLine("--------------------------------");
+                }
 
                 XmlDocument documentPlays = new XmlDocument();
                 documentPlays.Load(game_data_directory + "/plays.xml");
@@ -151,7 +174,7 @@ namespace ZobristAtBat
                         }
                     }
 
-                    if (gamePreviousAtBatCount != gameAtBatCount && gameAtBatCount != 0)
+                    if (gamePreviousAtBatCount != gameAtBatCount && gameAtBatCount != "0")
                     {
                         batterAtBat = documentPlays.SelectSingleNode("game/players/batter").Attributes["pid"].Value;
                         batterOnDeck = documentPlays.SelectSingleNode("game/players/deck").Attributes["pid"].Value;
@@ -160,33 +183,27 @@ namespace ZobristAtBat
                         if (getBatterEvent == true)
                         {
                             documentBatterEvent.Load(game_data_directory + "/game_events.xml");
-                            batterPlayDesc = documentBatterEvent.SelectSingleNode("//atbat[@num='" + (BatterEventAtBat) + "']").Attributes["des"].Value;
-                            
+                            batterPlayDesc = documentBatterEvent.SelectSingleNode("//atbat[@num='" + (gamePreviousAtBatCount) + "']").Attributes["des"].Value;
 
-                            string[] batterPlayArray = batterPlayDesc.Split(new Char[] { '.' });
-                            
-                            if (batterPlayDesc.Length > 140)
+                            string[] batterPlayArray = batterPlayDesc.Split(',').Select(play => play.Trim()).ToArray();
+
+                            if (batterPlayArray.Length == 1)
                             {
-                                tweet = currentDate + " " + batterPlayArray[0].Split(new Char[] { ',' }).GetValue(0).ToString() + ".";
+                                tweet = currentDate + " " + batterPlayArray[0];
                             }
                             else
                             {
-                                tweet = currentDate + " " + batterPlayArray[0];
+                                if (batterPlayArray[1].IndexOf(' ') == -1)
+                                {
+                                    tweet = currentDate + " " + batterPlayArray[0] + "." + batterPlayArray[1] + ".";
+                                }
+                            }   
 
-                                if (batterPlayArray[1].Length == 1)
-                                {
-                                    tweet = tweet + "." + batterPlayArray[1] + ".";
-                                }
+                            tweet = currentDate + " " + batterPlayArray[0];
 
-                                if (batterPlayArray[2].Contains(" "))
-                                {
-                                    tweet = tweet + ".";
-                                }
-                                else
-                                {
-                                    tweet = tweet + " " + batterPlayArray[2] + ".";
-                                }
-                            }
+                            if (batterPlayArray[0].Trim().Length == 1)
+                                tweet = tweet + " " + batterPlayArray[1].Trim() + ". " + batterPlayArray[2] + ".";
+                            
 
                             SendTweet(tweet);
                             getBatterEvent = false;
